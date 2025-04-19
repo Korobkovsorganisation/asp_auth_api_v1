@@ -12,7 +12,7 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace asp_auth_api_v1.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    [Migration("20250419022604_InitialCreate")]
+    [Migration("20250419025224_InitialCreate")]
     partial class InitialCreate
     {
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
