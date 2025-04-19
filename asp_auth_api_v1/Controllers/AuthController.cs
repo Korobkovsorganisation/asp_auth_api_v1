@@ -14,6 +14,7 @@ namespace AuthLab.Controllers
     {
         private readonly UserManager<IdentityUser> _userManager;
         private readonly IConfiguration _configuration;
+        private readonly TokenBlacklist _tokenBlacklist;
 
         public AuthController(
             UserManager<IdentityUser> userManager,
@@ -23,6 +24,44 @@ namespace AuthLab.Controllers
             _configuration = configuration;
         }
 
+        public class TokenBlacklist
+        {
+            private readonly HashSet<string> _blacklistedTokens = new HashSet<string>();
+
+            public void Add(string token)
+            {
+                _blacklistedTokens.Add(token);
+            }
+
+            public bool IsBlacklisted(string token)
+            {
+                return _blacklistedTokens.Contains(token);
+            }
+        }
+        public class JwtMiddleware
+        {
+            private readonly RequestDelegate _next;
+            private readonly TokenBlacklist _tokenBlacklist;
+
+            public JwtMiddleware(RequestDelegate next, TokenBlacklist tokenBlacklist)
+            {
+                _next = next;
+                _tokenBlacklist = tokenBlacklist;
+            }
+
+            public async Task Invoke(HttpContext context)
+            {
+                var token = context.Request.Headers["Authorization"].FirstOrDefault()?.Split(" ").Last();
+
+                if (!string.IsNullOrEmpty(token) && _tokenBlacklist.IsBlacklisted(token))
+                {
+                    context.Response.StatusCode = 401;
+                    return;
+                }
+
+                await _next(context);
+            }
+        }
         [HttpPost("register")]
         public async Task<IActionResult> Register(RegisterModel model)
         {
@@ -65,7 +104,23 @@ namespace AuthLab.Controllers
                 Expiration = token.ValidTo
             });
         }
+        [HttpPost("logout")]
+        public async Task<IActionResult> Logout(LogoutModel model)
+        {
+            var user = await _userManager.FindByNameAsync(model.Username);
 
+            if (user == null)
+                return Unauthorized();
+
+            var token = Request.Headers["Authorization"].ToString().Split(" ").Last();
+
+            if (!string.IsNullOrEmpty(token))
+            {
+                _tokenBlacklist.Add(token);
+            }
+
+            return Ok(new { message = "User logged out successfully!" });
+        }
         private JwtSecurityToken GetToken(List<Claim> authClaims)
         {
             var authSigningKey = new SymmetricSecurityKey(
